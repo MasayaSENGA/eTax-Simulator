@@ -87,6 +87,11 @@ tr.key td{font-weight:700;background:var(--accent-soft)}
 td.sub{color:var(--muted);font-size:.8rem}
 ul.notes{margin:0;padding-left:1.2em;font-size:.85rem}
 ul.notes li{margin-bottom:6px;max-width:65ch}
+footer.legal{margin:28px 0 8px;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+footer.legal h2{font-size:1.05rem;margin:0 0 8px}
+footer.legal p{font-size:.82rem;color:var(--muted);margin:0 0 10px}
+footer.legal ol{margin:0;padding-left:1.3em;font-size:.82rem;color:var(--ink)}
+footer.legal li{margin-bottom:8px;max-width:72ch}
 .bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.08);z-index:5}
 .bar .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 20px;padding-top:10px;padding-bottom:10px}
 .bar span{display:block;font-size:.72rem;color:var(--muted)}
@@ -108,16 +113,28 @@ ul.notes li{margin-bottom:6px;max-width:65ch}
   <header class="top">
     <h1>令和8年分 所得税試算ノート<small>確定申告（令和9年1月〜3月15日に手続きする分）の税額と、令和9年度住民税の概算</small></h1>
     <div class="tools">
-      <span class="pill" id="samplePill">入力例を表示中</span>
+      <span class="pill" id="samplePill" hidden>入力例を表示中</span>
       <button class="btn small" id="btnClear" type="button">すべて空にする</button>
       <button class="btn small" id="btnSample" type="button">入力例に戻す</button>
     </div>
   </header>
-  <p class="notice">個人が作成した非公式の試算ツールです。国税庁・e-Taxとは関係がなく、申告書の作成や提出はできません。入力内容はこのページの外へ送信・保存されず、ページを閉じると消えます。実際の申告は国税庁の「確定申告書等作成コーナー」で行ってください。</p>
+  <p class="notice">個人が作成した非公式の試算ツールです。表示される金額は概算であり、税額の確定や税務相談ではありません。詳しくはページ末尾の免責事項をご確認ください。</p>
   <div class="layout">
     <nav class="steps" id="steps" aria-label="入力の手順"></nav>
     <main id="main"></main>
   </div>
+  <footer class="legal">
+    <h2>免責事項</h2>
+    <p>本ページを利用する前に、以下を確認してください。</p>
+    <ol>
+      <li>本ツールは個人が学習・試算のために作成した非公式のプログラムです。国税庁、e-Tax、総務省、市区町村その他の公的機関が作成・監修・推奨したものではなく、これらとは一切関係ありません。</li>
+      <li>表示される所得税・復興特別所得税・住民税の金額は、入力された数値にもとづく概算です。税額の通知、納税額の確定、税務書類の作成、税理士法に定める税務代理・税務相談を行うものではありません。</li>
+      <li>計算の正確性、完全性、最新性、特定の目的への適合性は保証しません。税制改正、通達・判例、自治体ごとの取扱い、入力漏れ、本ツールが対象としていない所得・控除により、実際の税額と異なることがあります。</li>
+      <li>申告、納税および還付の申請は、利用者自身の責任で行ってください。実際の手続は国税庁の「確定申告書等作成コーナー」など公式の手段で行い、判断に迷うときは所轄の税務署または税理士にご相談ください。</li>
+      <li>本ツールの利用または利用できなかったことにより生じた損害（過少申告、加算税、延滞税、還付の不受理、機会損失を含みます）について、制作者は故意または重過失がある場合を除き、責任を負いません。</li>
+      <li>入力した金額や家族構成は、お使いのブラウザの中だけで計算されます。サーバーへの送信・保存は行わず、ページを閉じるか再読み込みすると消えます。通信の秘密や端末の安全性は、利用者の環境に依存します。</li>
+    </ol>
+  </footer>
 </div>
 <div class="bar" aria-live="polite"><div class="wrap" id="bar"></div></div>
 
@@ -459,7 +476,7 @@ const sample=()=>{const s=blank();
   s.deps=[{age:'16',incKind:'income',amount:0,disability:'none'}];
   Object.assign(s.ded,{social:750000,lifeNew:96000,quake:18000,medPaid:180000,furusato:40000});
   return s;};
-let state=sample(), step=0, isSample=true, R=null;
+let state=blank(), step=0, isSample=false, R=null;
 
 const $=s=>document.querySelector(s);
 const yen=v=>Math.trunc(v).toLocaleString('ja-JP');
