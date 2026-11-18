@@ -77,6 +77,13 @@ select:focus-visible,button:focus-visible,input[type=checkbox]:focus-visible{out
 .hero strong{font-size:1.9rem;font-variant-numeric:tabular-nums;line-height:1.3;display:block}
 .hero .pay strong{color:var(--pay)} .hero .refund strong{color:var(--refund)}
 .hero em{font-style:normal;font-size:.78rem;color:var(--muted)}
+.fz{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fz div{background:var(--bg);border-radius:8px;padding:12px 14px}
+.fz span{display:block;font-size:.75rem;color:var(--muted)}
+.fz strong{font-size:1.35rem;font-variant-numeric:tabular-nums;line-height:1.3}
+.fz em{font-style:normal;display:block;font-size:.78rem;color:var(--muted);margin-top:2px}
+.fz .over strong{color:var(--pay)}
+.fz .room strong{color:var(--accent)}
 .tw{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.9rem}
 th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -104,6 +111,9 @@ footer.legal li{margin-bottom:8px;max-width:72ch}
   nav.steps button[aria-current="step"]{box-shadow:inset 0 -3px 0 var(--accent)}
   .bar .wrap{grid-template-columns:repeat(2,1fr)}
   h1{font-size:1.4rem}
+}
+@media (max-width:520px){
+  .fz{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:no-preference){nav.steps button,.btn{transition:background .15s,border-color .15s}}
 </style>
@@ -170,6 +180,17 @@ function pensionDeduction(rev, age65, otherIncome) {
   else if (rev <= 10000000) d = rev * 0.05 + 1455000;
   else d = 1955000;
   return Math.min(rev, Math.floor(d - cut));
+}
+
+function maxDonationDelta(spRate, capSp) {
+  if (!(spRate > 0) || capSp <= 0) return 0;
+  let lo = 0, hi = Math.floor(capSp / spRate) + 2;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (Math.floor(mid * spRate) <= capSp) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
 }
 
 function incomeTaxOn(taxable) {
@@ -429,13 +450,15 @@ function calc(inp) {
   J.loan = Math.min(jr, pos(T.loanFull - T.loan), Math.min(97500, Math.floor(taxable * 0.05))); jr -= J.loan;
   // 寄附金税額控除（ふるさと納税）
   const fz = n(D.furusato);
-  J.donBasic = 0; J.donSpecial = 0;
+  const jrBeforeDon = jr;
+  const rateBase = J.taxable - diff;
+  const marginal = rateBase < 0 ? 0 : incomeTaxOn(rateBase).rate;
+  const spRate = rateBase < 0 ? 0.9 : 0.9 - marginal * 1.021;
+  const capSp = Math.floor(jrBeforeDon * 0.2);
+  J.donBasic = 0; J.donSpecial = 0; J.donCapped = false;
+  J.fzRate = marginal; J.fzSpRate = spRate; J.fzCapSp = capSp;
   if (fz > 2000) {
     J.donBasic = Math.floor(pos(Math.min(fz, Math.floor(total * 0.3)) - 2000) * 0.10);
-    const rateBase = J.taxable - diff;
-    const r = rateBase < 0 ? 0 : incomeTaxOn(rateBase).rate;
-    const spRate = rateBase < 0 ? 0.9 : 0.9 - r * 1.021;
-    const capSp = Math.floor(jr * 0.2);
     const raw = Math.floor((fz - 2000) * spRate);
     J.donSpecial = Math.min(raw, capSp);
     J.donCapped = raw > capSp;
@@ -452,6 +475,17 @@ function calc(inp) {
   else if (total <= 35 * MAN * cnt + 10 * MAN + (cnt > 1 ? 32 * MAN : 0)) { J.exempt = 'shotoku'; J.shotokuwari = 0; }
   J.total = J.shotokuwari + J.kinto;
   J.diff = diff;
+  const byIncome = Math.floor(total * 0.3);
+  let fzLimit = 0;
+  if (!J.exempt && spRate > 0 && capSp > 0 && byIncome > 2000) {
+    fzLimit = Math.min(2000 + maxDonationDelta(spRate, capSp), byIncome);
+  }
+  J.fz = fz;
+  J.fzLimit = fzLimit;
+  if (fzLimit <= 0) J.fzStatus = 'none';
+  else if (fz > fzLimit) { J.fzStatus = 'over'; J.fzGap = fz - fzLimit; }
+  else if (fz < fzLimit) { J.fzStatus = 'room'; J.fzGap = fzLimit - fz; }
+  else { J.fzStatus = 'exact'; J.fzGap = 0; }
   R.rt = J;
   R.family = { spInc: sp ? sp.inc : null, deps: deps.map(d => d.inc) };
   return R;
@@ -539,6 +573,15 @@ const VIEWS=[
 ];
 
 function row(l,v,cls,sub){return `<tr class="${cls||''}"><td>${l}${sub?`<div class="sub">${sub}</div>`:''}</td><td>${v}</td></tr>`;}
+function furusatoBox(j){
+  if(j.fzStatus==='none') return `<section class="grp"><h3>ふるさと納税の上限</h3><p>住民税の所得割がないため、自己負担が2,000円となる寄附の上限はありません。</p></section>`;
+  const state=j.fzStatus==='over'
+    ? `<div class="over"><span>現在の状態</span><strong>超過</strong><em>上限を ${yen(j.fzGap)} 円超えています</em></div>`
+    : j.fzStatus==='exact'
+    ? `<div class="room"><span>現在の状態</span><strong>上限ちょうど</strong><em>自己負担2,000円の目安と同じ額です</em></div>`
+    : `<div class="room"><span>現在の状態</span><strong>猶予</strong><em>上限まであと ${yen(j.fzGap)} 円</em></div>`;
+  return `<section class="grp"><h3>ふるさと納税の上限</h3><p>自己負担が2,000円となる寄附額の目安です。住民税の特例控除（所得割の20%）から計算し、所得金額の30%を超える分は含めていません。</p><div class="fz">${state}<div><span>控除上限額</span><strong>${yen(j.fzLimit)} 円</strong></div><div><span>入力した寄附額</span><strong>${yen(j.fz)} 円</strong></div></div></section>`;
+}
 function results(){
   const i=R.income,d=R.ded,t=R.it,j=R.rt;
   const fin=t.final, kind=fin>0?'pay':fin<0?'refund':'';
@@ -554,6 +597,7 @@ function results(){
     <div class="${kind}"><span>所得税及び復興特別所得税（令和8年分）</span><strong>${fin>0?'納付 '+yen(fin):fin<0?'還付 '+yen(-fin):'0'} 円</strong><em>${fin>0?'令和9年3月15日までに納める額':fin<0?'申告すると戻る額':'納付・還付なし'}</em></div>
     <div><span>住民税（令和9年度・概算）</span><strong>${yen(j.total)} 円</strong><em>${j.exempt==='all'?'非課税の見込み':'所得割 '+yen(j.shotokuwari)+' ＋ 均等割等 '+yen(j.kinto)+'（月あたり約 '+yen(j.total/12)+'）'}</em></div>
   </div>
+  ${furusatoBox(j)}
   <section class="grp"><h3>所得金額</h3><div class="tw"><table><tbody>${inc||row('所得なし','0')}${row('合計所得金額',yen(i.total),'sum',i.blueUsed?`青色申告特別控除 ${yen(i.blueUsed)} 円を差引き済み`:'')}</tbody></table></div></section>
   <section class="grp"><h3>所得から差し引かれる金額</h3><div class="tw"><table><thead><tr><th>控除</th><th>所得税</th><th>住民税</th></tr></thead><tbody>${ded}<tr class="sum"><td>合計</td><td>${yen(d.it.total)}</td><td>${yen(d.rt.total)}</td></tr></tbody></table></div></section>
   <section class="grp"><h3>所得税の計算</h3><div class="tw"><table><tbody>
